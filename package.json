@@ -1,1 +1,13 @@
+{
+  "name": "mc-stay-awake",
+  "version": "1.0.0",
+  "description": "",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "mineflayer": "^4.20.0"
+  }
+}
 
