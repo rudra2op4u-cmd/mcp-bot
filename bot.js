@@ -70,3 +70,15 @@ function createBot() {
 
 // Start the bot for the first time
 createBot();
+const https = require('https');
+
+// Self-ping every 5 minutes
+setInterval(() => {
+  // Replace the URL below with your actual Render URL
+  https.get('https://mcp-bot-xxxx.onrender.com', (res) => {
+    console.log(`[SELF-PING] Status: ${res.statusCode}`);
+  }).on('error', (err) => {
+    console.log(`[SELF-PING] Error: ${err.message}`);
+  });
+}, 300000); // 300,000ms = 5 minutes
+
