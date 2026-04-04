@@ -1,13 +1,14 @@
 {
-  "name": "mc-stay-awake",
+  "name": "rudra-combat-dummy",
   "version": "1.0.0",
-  "description": "",
   "main": "bot.js",
+  "dependencies": {
+    "mineflayer": "^4.22.0",
+    "mineflayer-pvp": "latest",
+    "mineflayer-pathfinder": "latest",
+    "mineflayer-armor-manager": "latest"
+  },
   "scripts": {
     "start": "node bot.js"
-  },
-  "dependencies": {
-    "mineflayer": "^4.20.0"
   }
 }
-
