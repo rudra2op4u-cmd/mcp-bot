@@ -1,63 +1,90 @@
 const http = require('http');
 const mineflayer = require('mineflayer');
+const pvp = require('mineflayer-pvp').plugin;
+const { pathfinder, Movements } = require('mineflayer-pathfinder');
+const armorManager = require('mineflayer-armor-manager');
 
-// 1. KEEP-ALIVE SERVER (For Render)
+// 1. KEEP-ALIVE SERVER (For Render/Cron-job)
 http.createServer((req, res) => {
-  res.write("Minecraft Player is Online!");
+  res.write("Combat Bot is Online!");
   res.end();
 }).listen(8080);
 
-// 2. BOT CONFIGURATION
-const botArgs = {
-  host: 'cromium.play.hosting',
-  username: 'RudraBot_AFK', 
-  version: '1.21.1',
-  hideErrors: true,
+// 2. BOT CONFIG
+const bot = mineflayer.createBot({
+  host: 'cromium.play.hosting', // Update to your server IP
+  username: 'BOT',
+  version: '1.21.1', // Change to 1.21.11 if needed
   auth: 'offline'
-};
+});
 
-let bot;
+// 3. LOAD PLUGINS
+bot.loadPlugin(pathfinder);
+bot.loadPlugin(pvp);
+bot.loadPlugin(armorManager);
 
-// 3. MAIN BOT FUNCTION
-function createBot() {
-  bot = mineflayer.createBot(botArgs);
+// 4. MAIN LOGIC
+bot.on('chat', (username, message) => {
+  if (username === bot.username) return;
 
-  bot.on('login', () => {
-    console.log(`[LOG] Bot logged into ${botArgs.host} as ${botArgs.username}`);
-  });
+  // --- THE KILL SWITCH / STATIONARY MODE ---
+  if (message === '?stop') {
+    bot.pvp.stop();                // Stop swinging sword
+    bot.pathfinder.setGoal(null);  // Stop all walking/pathfinding
+    bot.clearControlStates();      // Stop jumping/sprinting/walking
+    
+    bot.chat("Standing down. Stationary mode active.");
+    console.log(`[STATIONARY] Manual stop by ${username}`);
+    return;
+  }
 
-  // Anti-AFK Logic
-  bot.on('spawn', () => {
-    console.log("[LOG] Bot spawned in the world.");
-    if (global.afkInterval) clearInterval(global.afkInterval);
+  // --- FIGHT MODE ---
+  if (message === '?fight') {
+    const player = bot.players[username];
+    if (!player || !player.entity) {
+      bot.chat("I can't see you! Come closer.");
+      return;
+    }
 
-    global.afkInterval = setInterval(() => {
-      if (bot.entity) {
-        bot.setControlState('jump', true);
-        setTimeout(() => bot.setControlState('jump', false), 500);
-        console.log("[LOG] Anti-AFK: Jumped.");
-      }
-    }, 60000); 
-  });
+    bot.chat(`Engaging ${username}. Armouring up!`);
 
-  // Auto-Respawn Logic
-  bot.on('death', () => {
-    console.log("[WARN] Bot died! Respawning in 5 seconds...");
-    setTimeout(() => {
-      bot.respawn();
-    }, 5000);
-  });
+    // Auto-Equip Armor & Weapon
+    bot.armorManager.equipAll();
+    const weapon = bot.inventory.items().find(item => 
+      item.name.includes('sword') || item.name.includes('axe')
+    );
+    if (weapon) bot.equip(weapon, 'hand');
 
-  // Auto-Reconnect Logic
-  bot.on('end', (reason) => {
-    console.log(`[WARN] Disconnected: ${reason}. Reconnecting in 15 seconds...`);
-    if (global.afkInterval) clearInterval(global.afkInterval);
-    setTimeout(createBot, 15000);
-  });
+    // Movement Logic (allows bot to jump and navigate)
+    const defaultMove = new Movements(bot);
+    bot.pathfinder.setMovements(defaultMove);
 
-  bot.on('error', (err) => {
-    console.log(`[ERROR] ${err.message}`);
-  });
-}
+    // Start Attack AI
+    bot.pvp.attack(player.entity);
+  }
+});
 
-createBot();
+// 5. AUTO-STOP ON DEATH
+bot.on('entityDead', (entity) => {
+  if (bot.pvp.target === entity || entity === bot.entity) {
+    bot.pvp.stop();
+    bot.pathfinder.setGoal(null);
+    bot.clearControlStates();
+  }
+});
+
+// 6. AUTO-RESPAWN & RECONNECT
+bot.on('death', () => {
+  console.log("[WARN] Bot died! Respawning in 5s...");
+  setTimeout(() => bot.respawn(), 5000);
+});
+
+bot.on('end', (reason) => {
+  console.log(`[WARN] Disconnected: ${reason}. Retrying in 15s...`);
+  setTimeout(() => {
+    // Logic to restart the bot process
+    process.exit(); 
+  }, 15000);
+});
+
+bot.on('error', (err) => console.log(`[ERROR] ${err.message}`));
