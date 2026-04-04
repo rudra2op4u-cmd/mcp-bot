@@ -9,7 +9,7 @@ http.createServer((req, res) => {
 
 // 2. BOT CONFIGURATION
 const botArgs = {
-  host: 'cromium.play.hosting',
+  host: 'corodium.play.hosting',
   username: 'RudraBot_AFK', 
   version: '1.21.1',
   hideErrors: true,
