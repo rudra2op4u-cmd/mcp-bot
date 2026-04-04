@@ -2,7 +2,6 @@ const http = require('http');
 const mineflayer = require('mineflayer');
 
 // 1. KEEP-ALIVE SERVER (For Render)
-// This creates a small website so Render doesn't put the bot to sleep.
 http.createServer((req, res) => {
   res.write("Minecraft Player is Online!");
   res.end();
@@ -11,9 +10,10 @@ http.createServer((req, res) => {
 // 2. BOT CONFIGURATION
 const botArgs = {
   host: 'cromium.play.hosting',
-  username: 'RudraBot_AFK', // You can change this name
-  version: '1.21.1',        // Matches your server version
-  hideErrors: true          // Keeps the logs clean
+  username: 'RudraBot_AFK', 
+  version: '1.21.1',
+  hideErrors: true,
+  auth: 'offline'
 };
 
 let bot;
@@ -22,16 +22,13 @@ let bot;
 function createBot() {
   bot = mineflayer.createBot(botArgs);
 
-  // When the bot successfully logs in
   bot.on('login', () => {
     console.log(`[LOG] Bot logged into ${botArgs.host} as ${botArgs.username}`);
   });
 
-  // Anti-AFK Logic: Makes the bot jump every 60 seconds
+  // Anti-AFK Logic
   bot.on('spawn', () => {
     console.log("[LOG] Bot spawned in the world.");
-    
-    // Clear any existing intervals to prevent double-jumping
     if (global.afkInterval) clearInterval(global.afkInterval);
 
     global.afkInterval = setInterval(() => {
@@ -40,45 +37,27 @@ function createBot() {
         setTimeout(() => bot.setControlState('jump', false), 500);
         console.log("[LOG] Anti-AFK: Jumped.");
       }
-    }, 60000); // 60,000ms = 1 minute
+    }, 60000); 
   });
 
-  // Chat handling (Optional: keeps track of what's happening)
-  bot.on('chat', (username, message) => {
-    if (username === bot.username) return;
-    console.log(`[CHAT] ${username}: ${message}`);
+  // Auto-Respawn Logic
+  bot.on('death', () => {
+    console.log("[WARN] Bot died! Respawning in 5 seconds...");
+    setTimeout(() => {
+      bot.respawn();
+    }, 5000);
   });
 
-  // 4. AUTO-RECONNECT LOGIC
-  // If the server restarts or the bot is kicked, it waits 10 seconds and tries again.
+  // Auto-Reconnect Logic
   bot.on('end', (reason) => {
-    console.log(`[WARN] Disconnected: ${reason}. Reconnecting in 10 seconds...`);
-    setTimeout(createBot, 10000);
+    console.log(`[WARN] Disconnected: ${reason}. Reconnecting in 15 seconds...`);
+    if (global.afkInterval) clearInterval(global.afkInterval);
+    setTimeout(createBot, 15000);
   });
 
   bot.on('error', (err) => {
     console.log(`[ERROR] ${err.message}`);
-    if (err.code === 'ECONNREFUSED') {
-      console.log("[ERROR] Connection refused. Is the server down?");
-    }
-  });
-
-  bot.on('kicked', (reason) => {
-    console.log(`[KICKED] Reason: ${reason}`);
   });
 }
 
-// Start the bot for the first time
 createBot();
-const https = require('https');
-
-// Self-ping every 5 minutes
-setInterval(() => {
-  // Replace the URL below with your actual Render URL
-  https.get('https://mcp-bot-xxxx.onrender.com', (res) => {
-    console.log(`[SELF-PING] Status: ${res.statusCode}`);
-  }).on('error', (err) => {
-    console.log(`[SELF-PING] Error: ${err.message}`);
-  });
-}, 300000); // 300,000ms = 5 minutes
-
