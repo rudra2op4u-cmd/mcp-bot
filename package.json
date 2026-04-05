@@ -1,14 +1,7 @@
-{
-  "name": "rudra-combat-dummy",
-  "version": "1.0.0",
-  "main": "bot.js",
-  "dependencies": {
-    "mineflayer": "^4.22.0",
-    "mineflayer-pvp": "latest",
-    "mineflayer-pathfinder": "latest",
-    "mineflayer-armor-manager": "latest"
-  },
-  "scripts": {
-    "start": "node bot.js"
-  }
+"dependencies": {
+  "mineflayer": "^4.22.0",
+  "mineflayer-pvp": "latest",
+  "mineflayer-pathfinder": "latest",
+  "mineflayer-armor-manager": "latest",
+  "puppeteer": "latest"
 }
