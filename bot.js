@@ -14,6 +14,8 @@ const botArgs = {
   username: 'BOT',
   version: '1.21.1',
   auth: 'offline'
+  hideErrors: true,
+  checkTimeoutInterval: 90000
 };
 
 let bot;
