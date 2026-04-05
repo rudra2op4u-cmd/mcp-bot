@@ -1,124 +1,116 @@
-const http = require('http');
 const mineflayer = require('mineflayer');
+const puppeteer = require('puppeteer');
 const pvp = require('mineflayer-pvp').plugin;
 const { pathfinder, Movements } = require('mineflayer-pathfinder');
-const armorManager = require('mineflayer-armor-manager');
 
-// --- 1. KEEP-ALIVE SERVER (For Render/Cron-job) ---
-const PORT = process.env.PORT || 8080;
-http.createServer((req, res) => {
-  res.write("Rudra's Combat Bot is Online!");
-  res.end();
-}).listen(PORT);
+// --- CONFIGURATION: ADD YOUR LOGINS HERE ---
+const ACCOUNTS = {
+  "ff775f10": { email: "rudra2op4u@gmail.com", pass: "rudra2op4u@11" },
+  "678bd05e": { email: "rdstar2op4u@gmail.com", pass: "rudra2op4u@11" }
+};
 
-// --- 2. BOT CONFIGURATION ---
 const botArgs = {
-  host: 'cromium.play.hosting', // Update if your IP changes
+  host: 'cromium.play.hosting', 
   username: 'BOT',
-  version: '1.21.1',           // Works for 1.21.11 as well
-  auth: 'offline',
-  checkTimeoutInterval: 90000
+  version: '1.21.1',
+  auth: 'offline'
 };
 
 let bot;
-let fightInterval = null;
-let targetName = null;
 
+// --- DASHBOARD AUTO-STARTER ---
+async function startServerViaPanel(serverId) {
+  const creds = ACCOUNTS[serverId];
+  if (!creds) return console.log(`[ERROR] No credentials found for ${serverId}`);
+
+  console.log(`[DASHBOARD] Logging in for server: ${serverId}...`);
+  const browser = await puppeteer.launch({ 
+    headless: true, 
+    args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+  });
+  const page = await browser.newPage();
+
+  try {
+    // 1. Go to Login
+    await page.goto('https://panel.play.hosting/auth/login');
+    await page.type('input[name="username"]', creds.email);
+    await page.type('input[name="password"]', creds.pass);
+    await page.click('button[type="submit"]');
+    await page.waitForNavigation();
+
+    // 2. Go to the specific Server Panel
+    await page.goto(`https://panel.play.hosting/server/${serverId}`);
+    
+    // 3. Find and Click "Start"
+    await page.waitForSelector('button');
+    const clicked = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const startBtn = buttons.find(b => b.textContent.toLowerCase().includes('start'));
+      if (startBtn) {
+        startBtn.click();
+        return true;
+      }
+      return false;
+    });
+
+    if (clicked) console.log(`[SUCCESS] Start button pressed for ${serverId}`);
+    else console.log(`[WARN] Could not find Start button on page for ${serverId}`);
+
+  } catch (err) {
+    console.log(`[DASHBOARD ERROR] ${err.message}`);
+  } finally {
+    await browser.close();
+  }
+}
+
+// --- BOT INITIALIZATION ---
 function createBot() {
   bot = mineflayer.createBot(botArgs);
-
-  // Load Plugins
   bot.loadPlugin(pathfinder);
   bot.loadPlugin(pvp);
-  bot.loadPlugin(armorManager);
 
-  bot.on('login', () => console.log(`[SUCCESS] Logged in as ${bot.username}`));
+  bot.on('spawn', () => {
+    console.log("[GAME] Bot joined successfully!");
+    // Anti-AFK: Look around and jump every 3 mins
+    setInterval(() => {
+      bot.setControlState('jump', true);
+      setTimeout(() => bot.setControlState('jump', false), 500);
+      bot.look(Math.random() * 6, 0);
+    }, 180000);
+  });
 
-  // --- 3. CHAT COMMANDS ---
   bot.on('chat', (username, message) => {
     if (username === bot.username) return;
 
-    // STATIONARY / STOP COMMAND
-    if (message === '?stop') {
-      stopCombat();
-      bot.chat("Combat terminated. Standing still for target practice.");
-      return;
-    }
-
-    // FIGHT COMMAND
     if (message === '?fight') {
-      targetName = username;
       const player = bot.players[username];
-
-      if (!player || !player.entity) {
-        bot.chat("I can't see you! Get closer so I can lock on.");
-        return;
+      if (player && player.entity) {
+        bot.chat("Target locked. Fight mode active.");
+        bot.pvp.attack(player.entity);
       }
+    }
 
-      bot.chat(`Combat Protocol Engaged: Targeting ${username}`);
-      executeAttack(player.entity);
-
-      // HEARTBEAT MONITOR: Restarts AI if it stalls mid-fight
-      if (fightInterval) clearInterval(fightInterval);
-      fightInterval = setInterval(() => {
-        const p = bot.players[targetName];
-        if (targetName && p && p.entity) {
-          if (!bot.pvp.target) {
-            console.log("[DEBUG] AI Stalled. Re-engaging target...");
-            bot.pvp.attack(p.entity);
-          }
-        }
-      }, 2000); 
+    if (message === '?stop') {
+      bot.pvp.stop();
+      bot.pathfinder.setGoal(null);
+      bot.chat("Standing down. Stationary mode active.");
     }
   });
 
-  // --- 4. COMBAT FUNCTIONS ---
-  function executeAttack(entity) {
-    // 1. Equip best armor
-    bot.armorManager.equipAll();
-    
-    // 2. Equip best weapon
-    const weapon = bot.inventory.items().find(i => i.name.includes('sword') || i.name.includes('axe'));
-    if (weapon) bot.equip(weapon, 'hand');
-
-    // 3. Movement configuration
-    const defaultMove = new Movements(bot);
-    bot.pathfinder.setMovements(defaultMove);
-
-    // 4. Start PVP
-    bot.pvp.attack(entity);
-  }
-
-  function stopCombat() {
-    targetName = null;
-    if (fightInterval) clearInterval(fightInterval);
-    bot.pvp.stop();
-    bot.pathfinder.setGoal(null);
-    bot.clearControlStates();
-  }
-
-  // --- 5. EVENT HANDLERS (Respawn & Cleanup) ---
-  bot.on('entityDead', (entity) => {
-    if (bot.pvp.target === entity || entity === bot.entity) {
-      console.log("[LOG] Target or Bot died. Stopping AI.");
-      stopCombat();
-    }
-  });
-
-  bot.on('death', () => {
-    console.log("[WARN] Bot died! Respawning in 5 seconds...");
-    stopCombat();
-    setTimeout(() => bot.respawn(), 5000);
-  });
-
+  // --- AUTO-WAKE TRIGGER ---
   bot.on('end', (reason) => {
-    console.log(`[DISCONNECT] ${reason}. Reconnecting in 15s...`);
-    stopCombat();
-    setTimeout(createBot, 15000);
+    console.log(`[OFFLINE] Reason: ${reason}. Attempting Auto-Wake...`);
+    
+    // Try to start both servers
+    Object.keys(ACCOUNTS).forEach(async (id) => {
+      await startServerViaPanel(id);
+    });
+
+    // Wait 2.5 minutes for server boot before trying to join again
+    setTimeout(createBot, 150000);
   });
 
   bot.on('error', (err) => console.log(`[ERROR] ${err.message}`));
 }
 
-// Start the bot
 createBot();
