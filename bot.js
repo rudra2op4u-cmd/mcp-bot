@@ -13,7 +13,7 @@ const botArgs = {
   host: 'cromium.play.hosting', 
   username: 'BOT',
   version: '1.21.1',
-  auth: 'offline'
+  auth: 'offline',
   hideErrors: true,
   checkTimeoutInterval: 90000
 };
