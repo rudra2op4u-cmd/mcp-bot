@@ -1,7 +1,7 @@
 {
-  "name": "rudra-combat-dummy",
+  "name": "rudra-bot",
   "version": "1.0.0",
-  "description": "Minecraft bot with auto-wake feature",
+  "description": "Minecraft bot with email alerts",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
@@ -10,7 +10,6 @@
     "mineflayer": "^4.22.0",
     "mineflayer-pvp": "latest",
     "mineflayer-pathfinder": "latest",
-    "mineflayer-armor-manager": "latest",
-    "puppeteer": "latest"
+    "nodemailer": "latest"
   }
 }
