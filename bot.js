@@ -1,86 +1,53 @@
 const mineflayer = require('mineflayer');
-const puppeteer = require('puppeteer');
 const pvp = require('mineflayer-pvp').plugin;
-const { pathfinder, Movements } = require('mineflayer-pathfinder');
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
+const nodemailer = require('nodemailer');
 
-// --- CONFIGURATION: ADD YOUR LOGINS HERE ---
-const ACCOUNTS = {
-  "ff775f10": { email: "rudra2op4u@gmail.com", pass: "rudra2op4u@11" },
-  "678bd05e": { email: "rdstar2op4u@gmail.com", pass: "rudra2op4u@11" }
-};
-
+// --- CONFIGURATION ---
 const botArgs = {
-  host: 'cromium.play.hosting', 
-  username: 'BOT',
+  host: 'cromium.play.hosting', // Change this to your server IP
+  username: 'Bot',
   version: '1.21.1',
   auth: 'offline',
-  hideErrors: true,
-  checkTimeoutInterval: 90000
+  hideErrors: true,           // Fix for PartialReadError
+  checkTimeoutInterval: 90000 // Fix for 1.21.11 join lag
 };
 
-let bot;
-
-// --- DASHBOARD AUTO-STARTER ---
-async function startServerViaPanel(serverId) {
-  const creds = ACCOUNTS[serverId];
-  if (!creds) return console.log(`[ERROR] No credentials found for ${serverId}`);
-
-  console.log(`[DASHBOARD] Logging in for server: ${serverId}...`);
-  const browser = await puppeteer.launch({ 
-    headless: true, 
-    args: ['--no-sandbox', '--disable-setuid-sandbox'] 
-  });
-  const page = await browser.newPage();
-
-  try {
-    // 1. Go to Login
-    await page.goto('https://panel.play.hosting/auth/login');
-    await page.type('input[name="username"]', creds.email);
-    await page.type('input[name="password"]', creds.pass);
-    await page.click('button[type="submit"]');
-    await page.waitForNavigation();
-
-    // 2. Go to the specific Server Panel
-    await page.goto(`https://panel.play.hosting/server/${serverId}`);
-    
-    // 3. Find and Click "Start"
-    await page.waitForSelector('button');
-    const clicked = await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const startBtn = buttons.find(b => b.textContent.toLowerCase().includes('start'));
-      if (startBtn) {
-        startBtn.click();
-        return true;
-      }
-      return false;
-    });
-
-    if (clicked) console.log(`[SUCCESS] Start button pressed for ${serverId}`);
-    else console.log(`[WARN] Could not find Start button on page for ${serverId}`);
-
-  } catch (err) {
-    console.log(`[DASHBOARD ERROR] ${err.message}`);
-  } finally {
-    await browser.close();
+// --- EMAIL CONFIG (Use Gmail App Password) ---
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'YOUR_EMAIL@gmail.com',
+    pass: 'abcd efgh ijkl mnop' // YOUR 16-CHARACTER APP PASSWORD
   }
-}
+});
 
-// --- BOT INITIALIZATION ---
+let bot;
+let joinFailCount = 0;
+
 function createBot() {
+  console.log(`[SYSTEM] Attempting to join... (Strike: ${joinFailCount})`);
   bot = mineflayer.createBot(botArgs);
+
+  // Load Plugins
   bot.loadPlugin(pathfinder);
   bot.loadPlugin(pvp);
 
   bot.on('spawn', () => {
     console.log("[GAME] Bot joined successfully!");
-    // Anti-AFK: Look around and jump every 3 mins
+    joinFailCount = 0; // Reset counter on success
+
+    // Anti-AFK: Look and Jump every 3 minutes
     setInterval(() => {
-      bot.setControlState('jump', true);
-      setTimeout(() => bot.setControlState('jump', false), 500);
-      bot.look(Math.random() * 6, 0);
+      if (bot && bot.entity) {
+        bot.setControlState('jump', true);
+        setTimeout(() => bot.setControlState('jump', false), 500);
+        bot.look(Math.random() * 6, 0);
+      }
     }, 180000);
   });
 
+  // Combat Commands
   bot.on('chat', (username, message) => {
     if (username === bot.username) return;
 
@@ -99,20 +66,45 @@ function createBot() {
     }
   });
 
-  // --- AUTO-WAKE TRIGGER ---
+  // --- TWO-STRIKE EMAIL LOGIC ---
   bot.on('end', (reason) => {
-    console.log(`[OFFLINE] Reason: ${reason}. Attempting Auto-Wake...`);
-    
-    // Try to start both servers
-    Object.keys(ACCOUNTS).forEach(async (id) => {
-      await startServerViaPanel(id);
-    });
+    joinFailCount++;
+    console.log(`[OFFLINE] Reason: ${reason}`);
 
-    // Wait 2.5 minutes for server boot before trying to join again
-    setTimeout(createBot, 150000);
+    if (joinFailCount >= 2) {
+      console.log("[ALERT] Second failure. Sending email...");
+      sendEmailAlert(reason);
+      
+      // Wait 10 minutes after an alert before trying again to avoid spam
+      setTimeout(createBot, 600000); 
+    } else {
+      // First fail, try again in 30 seconds
+      setTimeout(createBot, 30000);
+    }
   });
 
-  bot.on('error', (err) => console.log(`[ERROR] ${err.message}`));
+  bot.on('error', (err) => {
+    if (!err.message.includes('PartialReadError')) {
+        console.log(`[ERROR] ${err.message}`);
+    }
+  });
 }
 
+async function sendEmailAlert(reason) {
+  const mailOptions = {
+    from: 'YOUR_EMAIL@gmail.com',
+    to: 'YOUR_EMAIL@gmail.com',
+    subject: '🚨 Minecraft Bot Alert: Server Offline',
+    text: `Your bot "Rudra_Fighter" failed to connect twice.\n\nReason: ${reason}\n\nPlease check Play.hosting manually.`
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("[EMAIL] Alert sent to your inbox!");
+  } catch (err) {
+    console.log("[EMAIL ERROR] Could not send mail: " + err.message);
+  }
+}
+
+// Start the process
 createBot();
