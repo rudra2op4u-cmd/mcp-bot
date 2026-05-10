@@ -12,7 +12,7 @@ http.createServer((req, res) => {
 const botArgs = {
   host: 'cromium.play.hosting',
   username: 'RudraBot_AFK', // You can change this name
-  version: '1.21.1',        // Matches your server version
+  version: '1.21.11',        // Matches your server version
   hideErrors: true          // Keeps the logs clean
 };
 
