@@ -1,15 +1,11 @@
 {
-  "name": "rudra-bot",
+  "name": "mcp-bot",
   "version": "1.0.0",
-  "description": "Minecraft bot with email alerts",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
   },
   "dependencies": {
-    "mineflayer": "^4.22.0",
-    "mineflayer-pvp": "latest",
-    "mineflayer-pathfinder": "latest",
-    "nodemailer": "latest"
+    "mineflayer": "^4.20.0"
   }
 }
