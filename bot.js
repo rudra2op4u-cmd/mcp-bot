@@ -1,110 +1,72 @@
+const http = require('http');
 const mineflayer = require('mineflayer');
-const pvp = require('mineflayer-pvp').plugin;
-const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
-const nodemailer = require('nodemailer');
 
-// --- CONFIGURATION ---
+// 1. KEEP-ALIVE SERVER (For Render)
+// This creates a small website so Render doesn't put the bot to sleep.
+http.createServer((req, res) => {
+  res.write("Minecraft Player is Online!");
+  res.end();
+}).listen(8080);
+
+// 2. BOT CONFIGURATION
 const botArgs = {
-  host: 'cromium.play.hosting', // Change this to your server IP
-  username: 'Bot',
-  version: '1.21.1',
-  auth: 'offline',
-  hideErrors: true,           // Fix for PartialReadError
-  checkTimeoutInterval: 90000 // Fix for 1.21.11 join lag
+  host: 'cromium.play.hosting',
+  username: 'RudraBot_AFK', // You can change this name
+  version: '1.21.1',        // Matches your server version
+  hideErrors: true          // Keeps the logs clean
 };
 
-// --- EMAIL CONFIG (Use Gmail App Password) ---
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: 'YOUR_EMAIL@gmail.com',
-    pass: 'abcd efgh ijkl mnop' // YOUR 16-CHARACTER APP PASSWORD
-  }
-});
-
 let bot;
-let joinFailCount = 0;
 
+// 3. MAIN BOT FUNCTION
 function createBot() {
-  console.log(`[SYSTEM] Attempting to join... (Strike: ${joinFailCount})`);
   bot = mineflayer.createBot(botArgs);
 
-  // Load Plugins
-  bot.loadPlugin(pathfinder);
-  bot.loadPlugin(pvp);
+  // When the bot successfully logs in
+  bot.on('login', () => {
+    console.log(`[LOG] Bot logged into ${botArgs.host} as ${botArgs.username}`);
+  });
 
+  // Anti-AFK Logic: Makes the bot jump every 60 seconds
   bot.on('spawn', () => {
-    console.log("[GAME] Bot joined successfully!");
-    joinFailCount = 0; // Reset counter on success
+    console.log("[LOG] Bot spawned in the world.");
+    
+    // Clear any existing intervals to prevent double-jumping
+    if (global.afkInterval) clearInterval(global.afkInterval);
 
-    // Anti-AFK: Look and Jump every 3 minutes
-    setInterval(() => {
-      if (bot && bot.entity) {
+    global.afkInterval = setInterval(() => {
+      if (bot.entity) {
         bot.setControlState('jump', true);
         setTimeout(() => bot.setControlState('jump', false), 500);
-        bot.look(Math.random() * 6, 0);
+        console.log("[LOG] Anti-AFK: Jumped.");
       }
-    }, 180000);
+    }, 60000); // 60,000ms = 1 minute
   });
 
-  // Combat Commands
+  // Chat handling (Optional: keeps track of what's happening)
   bot.on('chat', (username, message) => {
     if (username === bot.username) return;
-
-    if (message === '?fight') {
-      const player = bot.players[username];
-      if (player && player.entity) {
-        bot.chat("Target locked. Fight mode active.");
-        bot.pvp.attack(player.entity);
-      }
-    }
-
-    if (message === '?stop') {
-      bot.pvp.stop();
-      bot.pathfinder.setGoal(null);
-      bot.chat("Standing down. Stationary mode active.");
-    }
+    console.log(`[CHAT] ${username}: ${message}`);
   });
 
-  // --- TWO-STRIKE EMAIL LOGIC ---
+  // 4. AUTO-RECONNECT LOGIC
+  // If the server restarts or the bot is kicked, it waits 10 seconds and tries again.
   bot.on('end', (reason) => {
-    joinFailCount++;
-    console.log(`[OFFLINE] Reason: ${reason}`);
-
-    if (joinFailCount >= 2) {
-      console.log("[ALERT] Second failure. Sending email...");
-      sendEmailAlert(reason);
-      
-      // Wait 10 minutes after an alert before trying again to avoid spam
-      setTimeout(createBot, 600000); 
-    } else {
-      // First fail, try again in 30 seconds
-      setTimeout(createBot, 30000);
-    }
+    console.log(`[WARN] Disconnected: ${reason}. Reconnecting in 10 seconds...`);
+    setTimeout(createBot, 10000);
   });
 
   bot.on('error', (err) => {
-    if (!err.message.includes('PartialReadError')) {
-        console.log(`[ERROR] ${err.message}`);
+    console.log(`[ERROR] ${err.message}`);
+    if (err.code === 'ECONNREFUSED') {
+      console.log("[ERROR] Connection refused. Is the server down?");
     }
+  });
+
+  bot.on('kicked', (reason) => {
+    console.log(`[KICKED] Reason: ${reason}`);
   });
 }
 
-async function sendEmailAlert(reason) {
-  const mailOptions = {
-    from: 'YOUR_EMAIL@gmail.com',
-    to: 'YOUR_EMAIL@gmail.com',
-    subject: '🚨 Minecraft Bot Alert: Server Offline',
-    text: `Your bot "Rudra_Fighter" failed to connect twice.\n\nReason: ${reason}\n\nPlease check Play.hosting manually.`
-  };
-
-  try {
-    await transporter.sendMail(mailOptions);
-    console.log("[EMAIL] Alert sent to your inbox!");
-  } catch (err) {
-    console.log("[EMAIL ERROR] Could not send mail: " + err.message);
-  }
-}
-
-// Start the process
+// Start the bot for the first time
 createBot();
