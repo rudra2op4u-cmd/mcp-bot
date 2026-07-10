@@ -10,9 +10,9 @@ http.createServer((req, res) => {
 
 // 2. BOT CONFIGURATION
 const botArgs = {
-  host: 'cromium.play.hosting',
+  host: 'rdstar2op4u.aternos.me',
   username: 'RudraBot_AFK', // You can change this name
-  version: '1.21.11',        // Matches your server version
+  version: '1.21.1',        // Matches your server version
   hideErrors: true          // Keeps the logs clean
 };
 
