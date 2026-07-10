@@ -10,7 +10,7 @@ http.createServer((req, res) => {
 
 // 2. BOT CONFIGURATION
 const botArgs = {
-  host: 'rdstar2op4u.aternos.me',
+  host: 'rdstar2op4u.aternos.me:56352',
   username: 'RudraBot_AFK', // You can change this name
   version: '1.21.1',        // Matches your server version
   hideErrors: true          // Keeps the logs clean
